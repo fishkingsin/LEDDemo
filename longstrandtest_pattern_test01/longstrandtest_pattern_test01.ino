@@ -1,5 +1,6 @@
 #include "LPD8806.h"
 #include "SPI.h"
+#include <Easing.h>
 #include "TimerOne.h"
 // Simple test for 160 (5 meters) of LPD8806-based RGB LED strip
 
@@ -12,10 +13,13 @@ int nLEDs = 384;
 int dataPin  = 2;
 int clockPin = 3;
 int  count = 0;
-float r=255,g=0,b=0;
-float targetRed=255,targetGreen=0,targetBlue=0;
+float r=0,g=0,b=0;
+float targetRed=0,targetGreen=0,targetBlue=0;
+float curR=0,curG=0,curB=0;
+float time;
 int mode = 0;
-float fade = 0.1;
+int fade = 60*2;//2 sec uder 60 fps
+boolean isLoop = false;
 // First parameter is the number of LEDs in the strand.  The LED strips
 // are 32 LEDs per meter but you can extend or cut the strip.  Next two
 // parameters are SPI data and clock pins:
@@ -29,12 +33,12 @@ LPD8806 strip = LPD8806(nLEDs);//, dataPin, clockPin);
 // clock = pin B1.  For Leonardo, this can ONLY be done on the ICSP pins.
 //LPD8806 strip = LPD8806(nLEDs);
 int step_ = 16;
-//int delay_ = 100;
+
 int v = 1;
 int acc = 0;
-uint32_t pixels[384];
-int color=0;
+
 int _delay = 4;
+void setColor(int RED , int GREEN ,int BLUE);
 void setup() {
   // Start up the LED strip
   strip.begin();
@@ -43,12 +47,24 @@ void setup() {
   strip.show();
   Timer1.initialize();
   Timer1.attachInterrupt(callback, 1000000 / 60); // 60 frames/second
-//  delay_ = 0;
+  //  delay_ = 0;
   Serial.begin(9600); 
   while (!Serial) {
     ; // wait for serial port to connect. Needed for Leonardo only
   }
-  color = 0;
+
+
+
+  //  int  i=0;
+
+  //  for(i=0; i<strip.numPixels(); i++) {
+  //    strip.setPixelColor(i, strip.Color(255,255,255));
+  //  }
+  //  delay(500);
+  //  for(i=0; i<strip.numPixels(); i++) {
+  //    strip.setPixelColor(i, 0);
+  //  }
+  //  delay(500);
 }
 
 void loop() {
@@ -57,53 +73,34 @@ void loop() {
     int thisChar = Serial.read();
     if(thisChar=='1')
     {
-      //      r = 255;
-
-      targetRed    =  255;
-      targetGreen  =  0;
-      targetBlue    =  0;
-      color=1;
-      
+      setColor(255,0,0);
     }
     else if(thisChar=='2')
     {
-      targetGreen = 255;
-      targetRed = 0;
-      targetBlue = 0;
-      color=2;
+      setColor(0,255,0);
     }
     else if(thisChar=='3')
     {
 
-      targetRed = 0 ; 
-      targetGreen = 0;
-      targetBlue = 255;
+      setColor(0,0,255);
     }
     else if(thisChar=='4')
     {
 
-      targetRed = targetGreen = targetBlue  =255;
-
+      setColor(255,255,255);
     }
     else if(thisChar=='5')
     {
-
-      targetRed = 255;
-      targetGreen = 255;
-      targetBlue = 0;
+      setColor(255,0,255);
     }
     else if(thisChar=='6')
     {
-
-      targetRed = 0;
-      targetGreen = 255;
-      targetBlue = 255;
+      setColor(0,255,255);
     }
     else if(thisChar=='0')
-    {
-      targetRed = 0;
-      targetGreen = 0;
-      targetBlue = 0;
+    {  
+      setColor(0,0,0);
+
     }
     else if(thisChar=='-')
     {
@@ -132,6 +129,14 @@ void loop() {
       }
       count=0;
     }
+    else if (thisChar=='L')
+    {
+      isLoop = false;
+    }
+    else if (thisChar=='l')
+    {
+      isLoop = true;
+    }
     else if( thisChar =='d' && _delay>1)
     {
       _delay--;
@@ -143,15 +148,15 @@ void loop() {
     }
     else if (thisChar == 'f')
     {
-      if(fade>0)fade-=0.01;
+      if(fade-100>0)fade-=100;
     }
     else if (thisChar == 'F')
     {
-      if(fade<1)fade+=0.01;
+      fade+=100;
     }
 
   }
-//  Serial.println(r);
+  //  Serial.println(r);
 
 
   //if(mode==0)
@@ -162,54 +167,51 @@ void loop() {
   //
   //}
   //  delay(delay_);
+  //      Serial.print("RED: ");
+  //      Serial.println(r);
+}
+void setColor(int RED , int GREEN ,int BLUE)
+{
+  curR = r ;
+  curG = g ;
+  curB = b ;
+  targetRed = RED-curR;
+  targetGreen = GREEN-curG;
+  targetBlue = BLUE-curB;
+  time = 0;
+  Serial.print("RED: ");
+  Serial.print(r);
+  Serial.print("\tcurR: ");
+  Serial.print(curR);
+  Serial.print("\ttargetRed: ");
+  Serial.println(targetRed);
+  
+    Serial.print("GREEN: ");
+  Serial.print(g);
+  Serial.print("\tcurG: ");
+  Serial.print(curG);
+  Serial.print("\ttargetGreen: ");
+  Serial.println(targetGreen);
+  
+    Serial.print("BLUE: ");
+  Serial.print(b);
+  Serial.print("\tcurB: ");
+  Serial.print(curB);
+  Serial.print("\ttargetBLUE: ");
+  Serial.println(targetBlue);
 }
 void callback() {
-  r -= float(r-targetRed)*fade;
-  g -= float(g-targetGreen)*fade;
-  b -= float(b-targetBlue)*fade;
-  /*switch(color)
+
+  if(time<fade)
   {
-  case 1:
+    time++;
 
-      if(g>0)g--;
-      if(b>0)b--;
-      if(r<255)r++;
+    r = Easing::easeInOutCubic(time, curR, targetRed, fade);
+    g = Easing::easeInOutCubic(time, curG, targetGreen, fade);
+    b = Easing::easeInOutCubic(time, curB, targetBlue, fade);
 
-
-    break;
-  case 2:
-      if(r>0)r--;
-      if(b>0)b--;
-      if(g<255)g++;
-
-    break;
-  case 3:
-      if(r>0)r--;
-      if(g>0)g--;
-      if(b<255)b++;
-    break;
-  case 4:
-      if(r<255)r++;
-      if(g<255)g++;
-      if(b<255)b++;
-    break;
-  case 5:
-      if(r>0)r--;
-      if(g<255)g++;
-      if(b<255)b++;
-    break;
-  case 6:
-      if(g>0)g--;
-      if(r<255)r++;
-      if(b<255)b++;
-    break;
-  case 0:
-    if(r>0)r--;
-    if(g>0)g--;
-    if(b>0)b--;
-    break;
   }
-   */ 
+
   acc++;
   if(acc%_delay==0)
   {
@@ -219,7 +221,7 @@ void callback() {
 
     count=int(count)%strip.numPixels();
   }
-  if(count==0)
+  if(count==0 && isLoop)
   {
     if(count<0 && v<0)
     {
@@ -234,14 +236,8 @@ void callback() {
 void colorChase(uint8_t red,uint8_t green,uint8_t blue) {
   int i;
   uint32_t c  = strip.Color(red,green,blue);
-  // Start by turning all pixels off:
-  //  for(i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, 0);
 
-  // Then display one pixel at a time:
   for(i=0; i<strip.numPixels(); i++) {
-    //    strip.setPixelColor(i, pixels[(i+count)%strip.numPixels()]);
-    //    strip.setPixelColor(i, c); // Set new pixel 'on'
-    //    strip.show();              // Refresh LED states
 
     if(mode==0)
     {
@@ -283,6 +279,9 @@ void colorChase(uint8_t red,uint8_t green,uint8_t blue) {
   strip.show(); // Refresh to turn off last pixel
 
 }
+
+
+
 
 
 
